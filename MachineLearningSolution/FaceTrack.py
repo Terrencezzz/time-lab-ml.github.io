@@ -14,6 +14,8 @@ import cv2
 import numpy as np
 from mtcnn import MTCNN
 from deepface import DeepFace
+import os
+import matplotlib.pyplot as plt
 
 
 def extract_faces(group_path: Path,
@@ -65,7 +67,7 @@ def verify_faces(face_paths: list[Path],
             img1_path=str(p),
             img2_path=str(person_path),
             model_name=model_name,
-            detector_backend="ssd",      # no extra TF deps
+            detector_backend="mtcnn",      # no extra TF deps
             enforce_detection=False
         )
         dt = time.time() - start
@@ -80,18 +82,55 @@ def verify_faces(face_paths: list[Path],
 
 if __name__ == "__main__":
     base_dir   = Path(__file__).resolve().parent
-    group_img  = base_dir / "Event"  / "gp-19.jpg"
-    person_img = base_dir / "Person" / "liyun-zhu-photo.jpg"
+    group_img  = base_dir / "Event"  / "gp-17.jpg"
     extract_dir = base_dir / "extracted_faces"
+    person_directory = base_dir / "Person"
 
-    # sanity-check
-    for path in (group_img, person_img):
-        if not path.is_file():
-            raise FileNotFoundError(f"Missing: {path}")
+    # sanity-check: make sure files exist
+    if not group_img.is_file():
+        raise FileNotFoundError(f"Missing: {group_img}")
+
+    if not person_directory.is_dir():
+        raise FileNotFoundError(f"Missing directory: {person_directory}")
 
     faces = extract_faces(group_img, extract_dir, min_size=112)
-    t, f = verify_faces(faces, person_img, model_name="Facenet")
 
-    print("\n=== Summary ===")
-    print(f"Matched:     {t}")
-    print(f"Not matched: {f}")
+    report = []
+    total_comparisons = 0
+    total_matches = 0
+
+    for face_name in os.listdir(extract_dir):
+        face_path = extract_dir / face_name
+        if not face_path.is_file():
+            continue  # skip if not a file
+
+        for person_name in os.listdir(person_directory):
+            person_path = person_directory / person_name
+            if not person_path.is_file():
+                continue  # skip if not a file
+
+            print(f"\n=== Comparing {face_name} vs {person_name} ===")
+            t, f = verify_faces([face_path], person_path, model_name="Facenet")
+            
+            total_comparisons += 1
+            if t > 0:
+                total_matches += 1
+                report.append({
+                    "extracted_face": face_name,
+                    "matched_person": person_name
+                })
+                
+                print(f"Matched: {t}")
+                
+                break
+
+            
+            print(f"Not matched: {f}")
+
+    # Final report
+    print("\n=== Final Matching Report ===")
+    if report:
+        for entry in report:
+            print(f"- {entry['extracted_face']} matched with {entry['matched_person']}")
+    else:
+        print("No matches found.")
