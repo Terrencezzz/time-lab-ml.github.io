@@ -80,8 +80,8 @@ def verify_faces(face_paths: list[Path],
 
 if __name__ == "__main__":
     base_dir   = Path(__file__).resolve().parent
-    group_img  = base_dir / "Event"  / "gp-3.jpg"
-    person_img = base_dir / "Person" / "ar4152.jpg"
+    group_img  = base_dir / "Event"  / "gp-19.jpg"
+    person_img = base_dir / "Person" / "liyun-zhu-photo.jpg"
     extract_dir = base_dir / "extracted_faces"
 
     # sanity-check
