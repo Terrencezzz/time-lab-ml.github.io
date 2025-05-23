@@ -33,4 +33,4 @@ jobs:
           # pip install opencv-python-headless pytest mtcnn deepface
 
       - name: Run face-track tests
-        run: pytest test_facetrack.py --maxfail=1 --disable-warnings -q
+        run: pytest /MachineLearningSolution/test_facetrack.py --maxfail=1 --disable-warnings -q
