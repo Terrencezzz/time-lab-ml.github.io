@@ -17,6 +17,39 @@ from deepface import DeepFace
 import os
 import matplotlib.pyplot as plt
 
+def crop_and_align(img_rgb, det, min_size):
+    x, y, w, h = det["box"]
+    # 1) pad
+    pad = int(0.3 * max(w, h))
+    x1 = max(0, x - pad)
+    y1 = max(0, y - pad)
+    x2 = min(img_rgb.shape[1], x + w + pad)
+    y2 = min(img_rgb.shape[0], y + h + pad)
+    face = img_rgb[y1:y2, x1:x2]
+
+    # 2) square
+    h2, w2 = face.shape[:2]
+    if h2 != w2:
+        m = max(h2, w2)
+        tmp = np.zeros((m, m, 3), dtype=face.dtype)
+        dx = (m - w2) // 2
+        dy = (m - h2) // 2
+        tmp[dy:dy+h2, dx:dx+w2] = face
+        face = tmp
+
+    # 3) align by eyes
+    le = det["keypoints"]["left_eye"]
+    re = det["keypoints"]["right_eye"]
+    angle = np.degrees(np.arctan2(re[1]-le[1], re[0]-le[0]))
+    M = cv2.getRotationMatrix2D((m//2, m//2), angle, 1)
+    face = cv2.warpAffine(face, M, (m, m))
+
+    # 4) resize to model size
+    if m < min_size:
+        face = cv2.resize(face, (min_size, min_size),
+                          interpolation=cv2.INTER_CUBIC)
+    return face
+
 
 def extract_faces(group_path: Path,
                   out_dir:    Path,
@@ -35,18 +68,31 @@ def extract_faces(group_path: Path,
     detections = detector.detect_faces(img_rgb)
 
     saved = []
+    # for i, det in enumerate(detections):
+    #     x, y, w, h = det["box"]
+    #     x, y = max(0, x), max(0, y)
+    #     face = img_rgb[y : y + h, x : x + w]
+
+    #     # Upscale if too small
+    #     if face.shape[0] < min_size or face.shape[1] < min_size:
+    #         face = cv2.resize(face, (min_size, min_size), interpolation=cv2.INTER_CUBIC)
+
+    #     out_path = out_dir / f"face_{i}.jpg"
+    #     # save as BGR
+    #     cv2.imwrite(str(out_path), cv2.cvtColor(face, cv2.COLOR_RGB2BGR))
+    #     saved.append(out_path)
+    
+    # This is your loop over each detected face:
     for i, det in enumerate(detections):
-        x, y, w, h = det["box"]
-        x, y = max(0, x), max(0, y)
-        face = img_rgb[y : y + h, x : x + w]
+        # 1) pad, square, align, resize:
+        face = crop_and_align(img_rgb, det, min_size)
 
-        # Upscale if too small
-        if face.shape[0] < min_size or face.shape[1] < min_size:
-            face = cv2.resize(face, (min_size, min_size), interpolation=cv2.INTER_CUBIC)
-
+        # 2) write out:
         out_path = out_dir / f"face_{i}.jpg"
-        # save as BGR
-        cv2.imwrite(str(out_path), cv2.cvtColor(face, cv2.COLOR_RGB2BGR))
+        # convert back to BGR for cv2.imwrite
+        cv2.imwrite(str(out_path),
+                    cv2.cvtColor(face, cv2.COLOR_RGB2BGR))
+
         saved.append(out_path)
 
     print(f"Extracted {len(saved)} faces → {out_dir}")
@@ -68,7 +114,8 @@ def verify_faces(face_paths: list[Path],
             img2_path=str(person_path),
             model_name=model_name,
             detector_backend="mtcnn",      # no extra TF deps
-            enforce_detection=False
+            enforce_detection=False, 
+            threshold=0.4,            # default is 0.4
         )
         dt = time.time() - start
         ok = res.get("verified", False)
