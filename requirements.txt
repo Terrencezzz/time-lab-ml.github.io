@@ -3,3 +3,4 @@ pytest
 mtcnn
 deepface
 matplotlib
+tf_keras
