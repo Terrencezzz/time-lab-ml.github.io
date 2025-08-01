@@ -15,7 +15,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 class FaceDetectorYunet():
     def __init__(self,
-                  model_path='/MachineLearningSolution/face_detection_yunet_2023mar.onnx',
+                  model_path='face_detection_yunet_2023mar.onnx',
                   img_size=(300, 300),
                   threshold=0.5):
         self.model_path = model_path
@@ -143,7 +143,7 @@ def show_by_name(name):
     img = cv2.imread(str(fp))
     show_image(img)
 
-file_path = "/MachineLearningSolution/avengersPhotos/images/train"
+file_path = "avengersPhotos/images/train"
 
 all_train_data = []
 for path in os.listdir(file_path):
@@ -290,7 +290,7 @@ def create_classification_model(input_shape, num_classes):
 
 # train data
 train_data= keras.utils.image_dataset_from_directory(
-    directory= '/content/images/train',
+    directory= 'avengersPhotos/images/train',
     labels="inferred",
     label_mode="int",
     color_mode="rgb",
@@ -300,7 +300,7 @@ train_data= keras.utils.image_dataset_from_directory(
 
 # test data
 test_data= keras.utils.image_dataset_from_directory(
-    directory= '/content/images/test',
+    directory= 'avengersPhotos/images/test',
     labels="inferred",
     label_mode="int",
     color_mode="rgb",
@@ -310,7 +310,7 @@ test_data= keras.utils.image_dataset_from_directory(
 
 # val data
 val_data= keras.utils.image_dataset_from_directory(
-    directory= '/content/images/val',
+    directory= 'avengersPhotos/images/val',
     labels="inferred",
     label_mode="int",
     color_mode="rgb",
@@ -323,7 +323,7 @@ fd = FaceDetectorYunet()
 
 # Prepare data for classification
 print("Preparing classification data...")
-X, y = prepare_classification_data('.', fd)
+X, y = prepare_classification_data('avengersPhotos/', fd)
 
 # Check if we have enough data
 if len(X) == 0:
@@ -454,10 +454,10 @@ def test_classifier(image_path, face_detector, model, class_names):
 
     return display_img
 
-loaded_model = keras.models.load_model('/MachineLearningSolution/inception_model.keras')
+loaded_model = keras.models.load_model('inception_model.keras')
 
-result = test_classifier('/MachineLearningSolution/avengersGroup/group1.png', fd, loaded_model, label_encoder.classes_)
-print(f"Results for {os.path.basename('/MachineLearningSolution/avengersGroup/group1.png')}:")
+result = test_classifier('avengersGroup/group1.png', fd, loaded_model, label_encoder.classes_)
+print(f"Results for {os.path.basename('avengersGroup/group1.png')}:")
 show_image(result)
 
 # Evaluate model
