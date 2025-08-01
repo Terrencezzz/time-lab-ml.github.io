@@ -143,28 +143,12 @@ def show_by_name(name):
     img = cv2.imread(str(fp))
     show_image(img)
 
-fd = FaceDetectorYunet()
-
-file_path = "/content/images/train"
-
+file_path = "/MachineLearningSolution/avengersPhotos/images/train"
 
 all_train_data = []
 for path in os.listdir(file_path):
     for image in os.listdir(os.path.join(file_path, path)):
         all_train_data.append(os.path.join(file_path, path, image))
-
-# for path in all_train_data:
-#     if os.path.isfile(path):  # Check if path is a file
-#         img = io.imread(path)
-#         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-#         faces = fd.detect(img)
-#         if faces:
-#             fd.draw_faces(img, faces)
-#         show_image(img)
-#     else:
-#         print(f"Skipping {path} as it is not a file.") # Print a message to inform about skipped folders.
-
-faces
 
 """## Classifier
 
@@ -470,10 +454,10 @@ def test_classifier(image_path, face_detector, model, class_names):
 
     return display_img
 
-loaded_model = keras.models.load_model('/content/inception_model.keras')
+loaded_model = keras.models.load_model('/MachineLearningSolution/inception_model.keras')
 
-result = test_classifier('/content/test-images-avengers-4.jpg', fd, model, label_encoder.classes_)
-print(f"Results for {os.path.basename('/content/test-images-avengers-4.jpg')}:")
+result = test_classifier('/MachineLearningSolution/avengersGroup/group1.png', fd, loaded_model, label_encoder.classes_)
+print(f"Results for {os.path.basename('/MachineLearningSolution/avengersGroup/group1.png')}:")
 show_image(result)
 
 # Evaluate model
