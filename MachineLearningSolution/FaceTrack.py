@@ -16,6 +16,7 @@ from mtcnn import MTCNN
 from deepface import DeepFace
 import os
 import matplotlib.pyplot as plt
+import json
 
 def crop_and_align(img_rgb, det, min_size):
     x, y, w, h = det["box"]
@@ -68,21 +69,6 @@ def extract_faces(group_path: Path,
     detections = detector.detect_faces(img_rgb)
 
     saved = []
-    # for i, det in enumerate(detections):
-    #     x, y, w, h = det["box"]
-    #     x, y = max(0, x), max(0, y)
-    #     face = img_rgb[y : y + h, x : x + w]
-
-    #     # Upscale if too small
-    #     if face.shape[0] < min_size or face.shape[1] < min_size:
-    #         face = cv2.resize(face, (min_size, min_size), interpolation=cv2.INTER_CUBIC)
-
-    #     out_path = out_dir / f"face_{i}.jpg"
-    #     # save as BGR
-    #     cv2.imwrite(str(out_path), cv2.cvtColor(face, cv2.COLOR_RGB2BGR))
-    #     saved.append(out_path)
-    
-    # This is your loop over each detected face:
     for i, det in enumerate(detections):
         # 1) pad, square, align, resize:
         face = crop_and_align(img_rgb, det, min_size)
@@ -128,56 +114,95 @@ def verify_faces(face_paths: list[Path],
 
 
 if __name__ == "__main__":
-    base_dir   = Path(__file__).resolve().parent
-    group_img  = base_dir / "Event"  / "gp-17.jpg"
-    extract_dir = base_dir / "extracted_faces"
-    person_directory = base_dir / "Person"
+    # base_dir   = Path(__file__).resolve().parent
+    # group_img  = base_dir / "Event"  / "gp-17.jpg"
+    # extract_dir = base_dir / "extracted_faces"
+    # person_directory = base_dir / "Person"
 
-    # sanity-check: make sure files exist
-    if not group_img.is_file():
-        raise FileNotFoundError(f"Missing: {group_img}")
+    # # sanity-check: make sure files exist
+    # if not group_img.is_file():
+    #     raise FileNotFoundError(f"Missing: {group_img}")
 
-    if not person_directory.is_dir():
-        raise FileNotFoundError(f"Missing directory: {person_directory}")
+    # if not person_directory.is_dir():
+    #     raise FileNotFoundError(f"Missing directory: {person_directory}")
 
-    faces = extract_faces(group_img, extract_dir, min_size=112)
+    # faces = extract_faces(group_img, extract_dir, min_size=112)
 
-    report = []
-    total_comparisons = 0
-    total_matches = 0
+    # report = []
+    # total_comparisons = 0
+    # total_matches = 0
 
-    for face_name in os.listdir(extract_dir):
-        face_path = extract_dir / face_name
-        if not face_path.is_file():
-            continue  # skip if not a file
+    # for face_name in os.listdir(extract_dir):
+    #     face_path = extract_dir / face_name
+    #     if not face_path.is_file():
+    #         continue  # skip if not a file
 
-        for person_name in os.listdir(person_directory):
-            person_path = person_directory / person_name
-            if not person_path.is_file():
-                continue  # skip if not a file
+    #     for person_name in os.listdir(person_directory):
+    #         person_path = person_directory / person_name
+    #         if not person_path.is_file():
+    #             continue  # skip if not a file
 
-            print(f"\n=== Comparing {face_name} vs {person_name} ===")
-            t, f = verify_faces([face_path], person_path, model_name="Facenet")
+    #         print(f"\n=== Comparing {face_name} vs {person_name} ===")
+    #         t, f = verify_faces([face_path], person_path, model_name="Facenet")
             
-            total_comparisons += 1
-            if t > 0:
-                total_matches += 1
-                report.append({
-                    "extracted_face": face_name,
-                    "matched_person": person_name
-                })
+    #         total_comparisons += 1
+    #         if t > 0:
+    #             total_matches += 1
+    #             report.append({
+    #                 "extracted_face": face_name,
+    #                 "matched_person": person_name
+    #             })
                 
-                print(f"Matched: {t}")
+    #             print(f"Matched: {t}")
                 
-                break
+    #             break
 
             
-            print(f"Not matched: {f}")
+    #         print(f"Not matched: {f}")
 
-    # Final report
-    print("\n=== Final Matching Report ===")
-    if report:
-        for entry in report:
-            print(f"- {entry['extracted_face']} matched with {entry['matched_person']}")
+    # # Final report
+    # print("\n=== Final Matching Report ===")
+    # if report:
+    #     for entry in report:
+    #         print(f"- {entry['extracted_face']} matched with {entry['matched_person']}")
+    # else:
+    #     print("No matches found.")
+    
+    base_dir      = Path(__file__).resolve().parent
+    group_dir     = base_dir / "avengersGroup"
+    test_dir      = base_dir / "avengersTest"
+    extract_root  = base_dir / "extracted_faces"
+
+    results = {}
+
+    # make sure extract_root is empty before we start
+    if extract_root.exists():
+        for f in extract_root.iterdir():
+            f.unlink()
     else:
-        print("No matches found.")
+        extract_root.mkdir()
+
+    for grp in group_dir.iterdir():
+        if not grp.is_file(): continue
+
+        # 1) extract faces for this group image
+        faces = extract_faces(grp, extract_root, min_size=112)
+
+        # 2) verify each face against every test image
+        matches = []
+        for face_path in faces:
+            for person_img in test_dir.iterdir():
+                if not person_img.is_file(): continue
+
+                t, _ = verify_faces([face_path], person_img, model_name="Facenet")
+                if t > 0:
+                    matches.append({
+                        "extracted_face": face_path.name,
+                        "matched_person": person_img.name
+                    })
+                    break
+
+        results[grp.name] = matches
+
+    # 3) print out the whole thing as pretty JSON
+    print(json.dumps(results, indent=2))
