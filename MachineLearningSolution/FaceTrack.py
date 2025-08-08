@@ -6,203 +6,189 @@ FaceTrack.py
 2) Upscale any tiny faces to 112×112.
 3) Verify each face against one Person image via DeepFace (Facenet).
 """
-
+import json
 import time
+import os
+import json
 from pathlib import Path
 
 import cv2
 import numpy as np
 from mtcnn import MTCNN
-from deepface import DeepFace
-import os
-import matplotlib.pyplot as plt
-import json
+from tensorflow.keras.models import load_model
 
-def crop_and_align(img_rgb, det, min_size):
-    x, y, w, h = det["box"]
-    # 1) pad
-    pad = int(0.3 * max(w, h))
-    x1 = max(0, x - pad)
-    y1 = max(0, y - pad)
-    x2 = min(img_rgb.shape[1], x + w + pad)
-    y2 = min(img_rgb.shape[0], y + h + pad)
-    face = img_rgb[y1:y2, x1:x2]
+# --- Configuration ---
+MIN_SIZE   = 112      # smallest face side we'll accept
+THRESHOLD  = 0.4      # max cosine distance for a “match”
+MODEL_PATH = "inception_model.keras"
 
-    # 2) square
-    h2, w2 = face.shape[:2]
-    if h2 != w2:
-        m = max(h2, w2)
-        tmp = np.zeros((m, m, 3), dtype=face.dtype)
-        dx = (m - w2) // 2
-        dy = (m - h2) // 2
-        tmp[dy:dy+h2, dx:dx+w2] = face
-        face = tmp
+# load your model once
+embedder = load_model(MODEL_PATH)
 
-    # 3) align by eyes
-    le = det["keypoints"]["left_eye"]
-    re = det["keypoints"]["right_eye"]
-    angle = np.degrees(np.arctan2(re[1]-le[1], re[0]-le[0]))
-    M = cv2.getRotationMatrix2D((m//2, m//2), angle, 1)
-    face = cv2.warpAffine(face, M, (m, m))
-
-    # 4) resize to model size
-    if m < min_size:
-        face = cv2.resize(face, (min_size, min_size),
-                          interpolation=cv2.INTER_CUBIC)
-    return face
+# build MTCNN detector once
+detector = MTCNN()
 
 
 def extract_faces(group_path: Path,
                   out_dir:    Path,
-                  min_size:   int = 112) -> list[Path]:
+                  min_size:   int = MIN_SIZE) -> list[Path]:
     """
     - Runs MTCNN on the group image
+    - Upscales any tiny faces to `min_size`×`min_size`
     - Saves each crop to out_dir/face_{i}.jpg
-    - Upscales any face below min_size
-    - Returns a list of the saved face file Paths
+    - Returns list of saved face Paths
     """
     out_dir.mkdir(exist_ok=True)
     img_bgr = cv2.imread(str(group_path))
     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
-    detector = MTCNN()
     detections = detector.detect_faces(img_rgb)
-
     saved = []
     for i, det in enumerate(detections):
-        # 1) pad, square, align, resize:
-        face = crop_and_align(img_rgb, det, min_size)
+        x, y, w, h = det["box"]
+        x, y = max(0, x), max(0, y)
+        face = img_rgb[y : y + h, x : x + w]
 
-        # 2) write out:
+        # upscale if needed
+        if face.shape[0] < min_size or face.shape[1] < min_size:
+            face = cv2.resize(face, (min_size, min_size),
+                              interpolation=cv2.INTER_CUBIC)
+
         out_path = out_dir / f"face_{i}.jpg"
-        # convert back to BGR for cv2.imwrite
         cv2.imwrite(str(out_path),
                     cv2.cvtColor(face, cv2.COLOR_RGB2BGR))
-
         saved.append(out_path)
 
     print(f"Extracted {len(saved)} faces → {out_dir}")
     return saved
 
 
+def get_embedding(img_path: Path) -> np.ndarray:
+    """
+    - Loads image, normalizes it, runs `embedder.predict`, and returns 1D embedding.
+    """
+    img_bgr = cv2.imread(str(img_path))
+    img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    # your model expects square input of size MODEL_INPUT × MODEL_INPUT
+    MODEL_INPUT = embedder.input_shape[1]
+    face = cv2.resize(img_rgb, (MODEL_INPUT, MODEL_INPUT),
+                      interpolation=cv2.INTER_CUBIC)
+    face = face.astype("float32") / 255.0
+    face = np.expand_dims(face, axis=0)
+    emb = embedder.predict(face)
+    return emb[0]
+
+
+def cosine_distance(a: np.ndarray, b: np.ndarray) -> float:
+    """1 − cosine_similarity"""
+    return 1.0 - np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+
 def verify_faces(face_paths: list[Path],
                  person_path: Path,
-                 model_name:  str = "Facenet") -> tuple[int, int]:
+                 threshold: float = THRESHOLD) -> tuple[int, int]:
     """
-    Runs DeepFace.verify on each face vs. person_path.
-    Returns (true_count, false_count).
+    For each face in `face_paths`, compute its embedding vs. `person_path` embedding.
+    Returns (count_matches, count_non_matches).
     """
-    trues = falses = 0
+    person_emb = get_embedding(person_path)
+    matches = 0
+    misses  = 0
+
     for p in face_paths:
         start = time.time()
-        res = DeepFace.verify(
-            img1_path=str(p),
-            img2_path=str(person_path),
-            model_name=model_name,
-            detector_backend="mtcnn",      # no extra TF deps
-            enforce_detection=False, 
-            threshold=0.4,            # default is 0.4
-        )
-        dt = time.time() - start
-        ok = res.get("verified", False)
-        print(f"{p.name}: verified={ok} ({dt:.2f}s)")
+        face_emb = get_embedding(p)
+        dist     = cosine_distance(face_emb, person_emb)
+        ok       = (dist <= threshold)
+        print(f"{p.name}: dist={dist:.3f}, verified={ok} "
+              f"({(time.time()-start):.2f}s)")
+        if ok:    matches += 1
+        else:     misses  += 1
 
-        if ok:   trues  += 1
-        else:    falses += 1
-
-    return trues, falses
+    return matches, misses
 
 
 if __name__ == "__main__":
-    # base_dir   = Path(__file__).resolve().parent
-    # group_img  = base_dir / "Event"  / "gp-17.jpg"
-    # extract_dir = base_dir / "extracted_faces"
-    # person_directory = base_dir / "Person"
+    base_dir         = Path(__file__).resolve().parent
+    group_img        = base_dir / "Event" / "gp-17.jpg"
+    person_directory = base_dir / "Person"
+    extract_dir      = base_dir / "extracted_faces"
 
-    # # sanity-check: make sure files exist
-    # if not group_img.is_file():
-    #     raise FileNotFoundError(f"Missing: {group_img}")
+    # sanity-check
+    if not group_img.is_file():
+        raise FileNotFoundError(f"Missing group image: {group_img}")
+    if not person_directory.is_dir():
+        raise FileNotFoundError(f"Missing Person dir: {person_directory}")
 
-    # if not person_directory.is_dir():
-    #     raise FileNotFoundError(f"Missing directory: {person_directory}")
+    # 1) extract & save faces
+    faces = extract_faces(group_img, extract_dir, MIN_SIZE)
 
-    # faces = extract_faces(group_img, extract_dir, min_size=112)
+    # 2) loop through extracted faces vs each person image
+    report = []
+    for face_file in os.listdir(extract_dir):
+        face_path = extract_dir / face_file
+        if not face_path.is_file():
+            continue
 
-    # report = []
-    # total_comparisons = 0
-    # total_matches = 0
+        for person_file in os.listdir(person_directory):
+            person_path = person_directory / person_file
+            if not person_path.is_file():
+                continue
 
-    # for face_name in os.listdir(extract_dir):
-    #     face_path = extract_dir / face_name
-    #     if not face_path.is_file():
-    #         continue  # skip if not a file
+            print(f"\n=== Comparing {face_file} vs {person_file} ===")
+            t, f = verify_faces([face_path], person_path, THRESHOLD)
+            if t > 0:
+                report.append({
+                    "extracted_face": face_file,
+                    "matched_person": person_file
+                })
+                print(f"Matched: {t}")
+                break
+            else:
+                print(f"Not matched: {f}")
 
-    #     for person_name in os.listdir(person_directory):
-    #         person_path = person_directory / person_name
-    #         if not person_path.is_file():
-    #             continue  # skip if not a file
-
-    #         print(f"\n=== Comparing {face_name} vs {person_name} ===")
-    #         t, f = verify_faces([face_path], person_path, model_name="Facenet")
-            
-    #         total_comparisons += 1
-    #         if t > 0:
-    #             total_matches += 1
-    #             report.append({
-    #                 "extracted_face": face_name,
-    #                 "matched_person": person_name
-    #             })
-                
-    #             print(f"Matched: {t}")
-                
-    #             break
-
-            
-    #         print(f"Not matched: {f}")
-
-    # # Final report
-    # print("\n=== Final Matching Report ===")
-    # if report:
-    #     for entry in report:
-    #         print(f"- {entry['extracted_face']} matched with {entry['matched_person']}")
-    # else:
-    #     print("No matches found.")
-    
-    base_dir      = Path(__file__).resolve().parent
-    group_dir     = base_dir / "avengersGroup"
-    test_dir      = base_dir / "avengersTest"
-    extract_root  = base_dir / "extracted_faces"
-
-    results = {}
-
-    # make sure extract_root is empty before we start
-    if extract_root.exists():
-        for f in extract_root.iterdir():
-            f.unlink()
+    # 3) final JSON report
+    print("\n=== Final Matching Report ===")
+    if report:
+        print(json.dumps(report, indent=2))
     else:
-        extract_root.mkdir()
-
-    for grp in group_dir.iterdir():
-        if not grp.is_file(): continue
-
-        # 1) extract faces for this group image
-        faces = extract_faces(grp, extract_root, min_size=112)
-
-        # 2) verify each face against every test image
-        matches = []
-        for face_path in faces:
-            for person_img in test_dir.iterdir():
-                if not person_img.is_file(): continue
-
-                t, _ = verify_faces([face_path], person_img, model_name="Facenet")
-                if t > 0:
-                    matches.append({
-                        "extracted_face": face_path.name,
-                        "matched_person": person_img.name
-                    })
-                    break
-
-        results[grp.name] = matches
-
-    # 3) print out the whole thing as pretty JSON
-    print(json.dumps(results, indent=2))
+        print("No matches found.")
+    
+    # base_dir      = Path(__file__).resolve().parent
+    # group_dir     = base_dir / "avengersGroup"
+    # test_dir      = base_dir / "avengersTest"
+    # extract_root  = base_dir / "extracted_faces"
+    #
+    # results = {}
+    #
+    # # make sure extract_root is empty before we start
+    # if extract_root.exists():
+    #     for f in extract_root.iterdir():
+    #         f.unlink()
+    # else:
+    #     extract_root.mkdir()
+    #
+    # for grp in group_dir.iterdir():
+    #     if not grp.is_file(): continue
+    #
+    #     # 1) extract faces for this group image
+    #     faces = extract_faces(grp, extract_root, min_size=112)
+    #
+    #     # 2) verify each face against every test image
+    #     matches = []
+    #     for face_path in faces:
+    #         for person_img in test_dir.iterdir():
+    #             if not person_img.is_file(): continue
+    #
+    #             t, _ = verify_faces([face_path], person_img, model_name="Facenet")
+    #             if t > 0:
+    #                 matches.append({
+    #                     "extracted_face": face_path.name,
+    #                     "matched_person": person_img.name
+    #                 })
+    #                 break
+    #
+    #     results[grp.name] = matches
+    #
+    # # 3) print out the whole thing as pretty JSON
+    # print(json.dumps(results, indent=2))
