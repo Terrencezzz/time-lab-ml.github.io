@@ -116,7 +116,7 @@ def show_image(image):
         _, buf = cv2.imencode('.jpg', rgb)
         display(Image(data=buf.tobytes()))
     else:
-        plt.imshow(image)
+        plt.imshow(image)   
         plt.axis('off')
         plt.show()
 

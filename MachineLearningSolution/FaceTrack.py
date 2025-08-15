@@ -117,15 +117,23 @@ def verify_faces(face_paths: list[Path],
 
 if __name__ == "__main__":
     base_dir         = Path(__file__).resolve().parent
-    group_img        = base_dir / "Event" / "gp-15.jpg"
+    group_img        = base_dir / "avengersGroup" / "group1.png"
     extract_dir      = base_dir / "extracted_faces"
-    person_directory = base_dir / "Person"
+    person_directory = base_dir / "avengersTest"
 
     # sanity-check inputs
     if not group_img.is_file():
         raise FileNotFoundError(f"Missing group image: {group_img}")
     if not person_directory.is_dir():
         raise FileNotFoundError(f"Missing Person directory: {person_directory}")
+
+    # --- Clear extracted_faces directory first ---
+    if extract_dir.exists():
+        for f in extract_dir.iterdir():
+            if f.is_file():
+                f.unlink()
+    else:
+        extract_dir.mkdir(exist_ok=True)
 
     # 1) Extract faces from the group image
     faces = extract_faces(group_img, extract_dir, MIN_SIZE)
