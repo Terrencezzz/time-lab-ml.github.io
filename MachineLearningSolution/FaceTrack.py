@@ -116,24 +116,21 @@ def verify_faces(face_paths: list[Path],
     return matches, misses
 
 
-def find_people_in_group(
+def find_people_in_group_simple(
     group_img: Path,
-    person_directory: Path,
     extract_dir: Path,
     *,
-    min_size: int = MIN_SIZE,
-    threshold: float = THRESHOLD,
-    strip_extension: bool = True,
     verbose: bool = True,
 ) -> str:
     """
-    Runs the full pipeline and returns a JSON string:
-    {
-        "status": "success",
-        "found": ["person1", "person2"],
-        "total_faces": <number_of_faces_detected>
-    }
+    Simplified version:
+    - Only requires group_img and extract_dir.
+    - Uses default person directory, min_size, and threshold from constants.
+    - Returns a JSON string.
     """
+    # Use the constant person directory
+    person_directory = Path(__file__).resolve().parent / "avengersTest"
+
     # --- Sanity checks ---
     if not group_img.is_file():
         return json.dumps({
@@ -155,23 +152,23 @@ def find_people_in_group(
         extract_dir.mkdir(parents=True, exist_ok=True)
 
     # 1) Extract faces
-    faces = extract_faces(group_img, extract_dir, min_size)
+    faces = extract_faces(group_img, extract_dir, MIN_SIZE)
 
     if verbose:
         print("\n=== Checking each person image ===")
 
-    # 2) Verify each person against all extracted faces
+    # 2) Verify each person
     found_people: List[str] = []
     for person_file in sorted(os.listdir(person_directory)):
         person_path = person_directory / person_file
         if not person_path.is_file():
             continue
 
-        name_out = person_path.stem if strip_extension else person_file
+        name_out = person_path.stem
 
         if verbose:
             print(f"\n-- {person_file} --")
-        t, f = verify_faces(faces, person_path, threshold=threshold)
+        t, f = verify_faces(faces, person_path, threshold=THRESHOLD)
 
         if t > 0:
             if verbose:
@@ -189,29 +186,20 @@ def find_people_in_group(
     }
     return json.dumps(response, indent=2)
 
+
 if __name__ == "__main__":
-    base_dir         = Path(__file__).resolve().parent
-    group_img        = base_dir / "avengersGroup" / "group1.png"
-    extract_dir      = base_dir / "extracted_faces"
-    person_directory = base_dir / "avengersTest"
+    base_dir    = Path(__file__).resolve().parent
+    group_img   = base_dir / "avengersGroup" / "group1.png"
+    extract_dir = base_dir / "extracted_faces"
 
-    # Get the JSON response
-    found_json = find_people_in_group(
-        group_img,
-        person_directory,
-        extract_dir,
-        min_size=MIN_SIZE,
-        threshold=THRESHOLD,
-        strip_extension=True,
-        verbose=True,
-    )
-
-    result = json.loads(found_json)
+    result_json = find_people_in_group_simple(group_img, extract_dir)
+    result = json.loads(result_json)
 
     print("\n=== Summary: People detected in group photo ===")
-    if result["status"] == "success" and result["found"]:
+    if result["status"] and result["found"]:
         for name in result["found"]:
             print(f"- {name}")
     else:
         print("No known persons detected.")
+
 
