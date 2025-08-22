@@ -118,18 +118,19 @@ def verify_faces(face_paths: list[Path],
 
 def find_people_in_group_simple(
     group_img: Path,
-    extract_dir: Path,
+    person_directory: Path,
     *,
     verbose: bool = True,
 ) -> str:
     """
     Simplified version:
-    - Only requires group_img and extract_dir.
-    - Uses default person directory, min_size, and threshold from constants.
+    - Requires only the group image path and person directory path.
+    - Uses a fixed extract_dir ("extracted_faces" folder in script directory).
+    - Keeps min_size and threshold constants.
     - Returns a JSON string.
     """
-    # Use the constant person directory
-    person_directory = Path(__file__).resolve().parent / "avengersTest"
+    # Use a constant directory for extracted faces
+    extract_dir = Path(__file__).resolve().parent / "extracted_faces"
 
     # --- Sanity checks ---
     if not group_img.is_file():
@@ -187,12 +188,13 @@ def find_people_in_group_simple(
     return json.dumps(response, indent=2)
 
 
-if __name__ == "__main__":
-    base_dir    = Path(__file__).resolve().parent
-    group_img   = base_dir / "avengersGroup" / "group1.png"
-    extract_dir = base_dir / "extracted_faces"
 
-    result_json = find_people_in_group_simple(group_img, extract_dir)
+if __name__ == "__main__":
+    base_dir       = Path(__file__).resolve().parent
+    group_img      = base_dir / "avengersGroup" / "group1.png"
+    person_dir     = base_dir / "avengersTest"
+
+    result_json = find_people_in_group_simple(group_img, person_dir)
     result = json.loads(result_json)
 
     print("\n=== Summary: People detected in group photo ===")
@@ -201,5 +203,6 @@ if __name__ == "__main__":
             print(f"- {name}")
     else:
         print("No known persons detected.")
+
 
 
