@@ -6,10 +6,11 @@ FaceTrack.py
 2) Upscale any tiny faces to 112×112.
 3) For each person image in Person/, verify all extracted faces via your custom Inception model.
 """
-
+import json
 import time
 import os
 from pathlib import Path
+from typing import List
 
 import cv2
 import numpy as np
@@ -115,49 +116,93 @@ def verify_faces(face_paths: list[Path],
     return matches, misses
 
 
-if __name__ == "__main__":
-    base_dir         = Path(__file__).resolve().parent
-    group_img        = base_dir / "avengersGroup" / "group1.jpg"
-    extract_dir      = base_dir / "extracted_faces"
-    person_directory = base_dir / "avengersTest"
+def find_people_in_group_simple(
+    group_img: Path,
+    person_directory: Path,
+    *,
+    verbose: bool = True,
+) -> str:
+    """
+    Simplified version:
+    - Requires only the group image path and person directory path.
+    - Uses a fixed extract_dir ("extracted_faces" folder in script directory).
+    - Keeps min_size and threshold constants.
+    - Returns a JSON string.
+    """
+    # Use a constant directory for extracted faces
+    extract_dir = Path(__file__).resolve().parent / "extracted_faces"
 
-    # sanity-check inputs
+    # --- Sanity checks ---
     if not group_img.is_file():
-        raise FileNotFoundError(f"Missing group image: {group_img}")
+        return json.dumps({
+            "status": "error",
+            "message": f"Missing group image: {group_img}"
+        })
     if not person_directory.is_dir():
-        raise FileNotFoundError(f"Missing Person directory: {person_directory}")
+        return json.dumps({
+            "status": "error",
+            "message": f"Missing person directory: {person_directory}"
+        })
 
-    # --- Clear extracted_faces directory first ---
+    # --- Clear extract_dir ---
     if extract_dir.exists():
         for f in extract_dir.iterdir():
             if f.is_file():
                 f.unlink()
     else:
-        extract_dir.mkdir(exist_ok=True)
+        extract_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1) Extract faces from the group image
+    # 1) Extract faces
     faces = extract_faces(group_img, extract_dir, MIN_SIZE)
 
-    # 2) For each person image, verify against all extracted faces
-    found_people = []
-    print("\n=== Checking each person image ===")
-    for person_file in os.listdir(person_directory):
+    if verbose:
+        print("\n=== Checking each person image ===")
+
+    # 2) Verify each person
+    found_people: List[str] = []
+    for person_file in sorted(os.listdir(person_directory)):
         person_path = person_directory / person_file
         if not person_path.is_file():
             continue
 
-        print(f"\n-- {person_file} --")
-        t, f = verify_faces(faces, person_path, threshold=THRESHOLD)
-        if t > 0:
-            print(f"=> **{person_file} FOUND** ({t} of {len(faces)} faces matched)")
-            found_people.append(person_file)
-        else:
-            print(f"=> {person_file} NOT found")
+        name_out = person_path.stem
 
-    # 3) Summary of detected people
+        if verbose:
+            print(f"\n-- {person_file} --")
+        t, f = verify_faces(faces, person_path, threshold=THRESHOLD)
+
+        if t > 0:
+            if verbose:
+                print(f"=> **{person_file} FOUND** ({t} of {len(faces)} faces matched)")
+            found_people.append(name_out)
+        else:
+            if verbose:
+                print(f"=> {person_file} NOT found")
+
+    # Build JSON response
+    response = {
+        "status": True,
+        "found": found_people,
+        "total_faces": len(faces)
+    }
+    return json.dumps(response, indent=2)
+
+
+
+if __name__ == "__main__":
+    base_dir       = Path(__file__).resolve().parent
+    group_img      = base_dir / "avengersGroup" / "group1.png"
+    person_dir     = base_dir / "avengersTest"
+
+    result_json = find_people_in_group_simple(group_img, person_dir)
+    result = json.loads(result_json)
+
     print("\n=== Summary: People detected in group photo ===")
-    if found_people:
-        for name in found_people:
+    if result["status"] and result["found"]:
+        for name in result["found"]:
             print(f"- {name}")
     else:
         print("No known persons detected.")
+
+
+
