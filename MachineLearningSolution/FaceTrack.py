@@ -117,7 +117,7 @@ def verify_faces(face_paths: list[Path],
 
 if __name__ == "__main__":
     base_dir         = Path(__file__).resolve().parent
-    group_img        = base_dir / "avengersGroup" / "group1.png"
+    group_img        = base_dir / "avengersGroup" / "group1.jpg"
     extract_dir      = base_dir / "extracted_faces"
     person_directory = base_dir / "avengersTest"
 
