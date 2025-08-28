@@ -20,7 +20,7 @@ from tensorflow.keras.models import load_model
 # --- Configuration ---
 MIN_SIZE    = 112                    # smallest face side we'll accept
 THRESHOLD   = 0.4                    # max cosine distance for a “match”
-MODEL_PATH  = "MachineLearningSolution\inception_model.keras"  # path to your saved Keras model
+MODEL_PATH  = "MachineLearningSolution/inception_model.keras"  # path to your saved Keras model
 
 # Load your embedding model once
 embedder = load_model(MODEL_PATH)
