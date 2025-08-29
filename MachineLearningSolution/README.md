@@ -1,4 +1,4 @@
-# FaceTrack - Face Detection and Recognition System
+# TIME Space FaceTrack - Face Detection and Recognition System
 
 A Python module for detecting and recognizing faces in group photos using deep learning. FaceTrack combines MTCNN face detection with pre-trained face recognition models to identify known individuals in group photographs.
 
@@ -227,14 +227,6 @@ Development dependencies:
 - Compares embeddings using cosine distance
 - Distance below threshold indicates a match
 - Cosine distance is robust to embedding magnitude variations
-
-## 🎯 Use Cases
-
-- **Event Photography**: Identify attendees in group photos
-- **Security Systems**: Verify known individuals in surveillance footage
-- **Photo Organization**: Automatically tag people in photo collections
-- **Social Media**: Auto-tagging features
-- **Attendance Systems**: Automated attendance tracking
 
 ## ⚠️ Limitations and Considerations
 
