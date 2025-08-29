@@ -166,6 +166,15 @@ def find_people_in_group_simple(
 
     faces = extract_faces(group_img, extract_dir, MIN_SIZE)
 
+    # If no faces found, return early
+    if not faces:
+        response = {
+            "status": True,
+            "found": [],
+            "total_faces": 0
+        }
+        return json.dumps(response, indent=2)
+
     if verbose:
         print("\n=== Checking each person image ===")
 
