@@ -40,7 +40,7 @@ def get_model(model_name: str = "Inception"):
         return _model_cache[model_name]
 
     if model_name.lower() == "facenet":
-        model_path = "MachineLearningSolution/facenet_model.keras"
+        model_path = "MachineLearningSolution/inception_model.keras"
     else:
         model_path = DEFAULT_MODEL_PATH
 
