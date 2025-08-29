@@ -20,7 +20,7 @@ from tensorflow.keras.models import load_model
 # --- Configuration ---
 MIN_SIZE    = 112
 THRESHOLD   = 0.4
-DEFAULT_MODEL_PATH = "MachineLearningSolution/inception_model.keras"
+DEFAULT_MODEL_PATH = Path(__file__).resolve().parent / "inception_model.keras"
 
 # Cache models when first requested
 _model_cache = {}
@@ -40,14 +40,14 @@ def get_model(model_name: str = "Inception"):
         return _model_cache[model_name]
 
     if model_name.lower() == "facenet":
-        model_path = "MachineLearningSolution/inception_model.keras"
+        model_path = Path(__file__).resolve().parent / "inception_model.keras"
     else:
         model_path = DEFAULT_MODEL_PATH
 
     if not Path(model_path).is_file():
         raise FileNotFoundError(f"Embedding model not found at {model_path}")
 
-    model = load_model(model_path)
+    model = load_model(str(model_path))
     _model_cache[model_name] = model
     return model
 
@@ -57,6 +57,10 @@ def extract_faces(group_path: Path,
                   min_size:   int = MIN_SIZE) -> list[Path]:
     out_dir.mkdir(exist_ok=True)
     img_bgr = cv2.imread(str(group_path))
+    
+    if img_bgr is None:
+        raise ValueError(f"Could not read image from {group_path}")
+    
     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
     detections = detector.detect_faces(img_rgb)
@@ -84,6 +88,10 @@ def get_embedding(img_path: Path, model_name: str = "Inception") -> np.ndarray:
     model = get_model(model_name)
 
     img_bgr = cv2.imread(str(img_path))
+    
+    if img_bgr is None:
+        raise ValueError(f"Could not read image from {img_path}")
+    
     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
     # model expects square inputs
